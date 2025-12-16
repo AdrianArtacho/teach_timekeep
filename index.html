@@ -4,9 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Schedule Clock</title>
+
   <style>
     :root { --bg: #111; --fg: #fff; }
-    html, body { height: 100%; margin: 0; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
     body {
       background: var(--bg);
       color: var(--fg);
@@ -17,7 +23,7 @@
     }
 
     .wrap {
-      width: min(1100px, 92vw);
+      width: min(1200px, 94vw);
       display: grid;
       gap: 18px;
       text-align: center;
@@ -25,384 +31,287 @@
 
     .clock {
       font-variant-numeric: tabular-nums;
-      font-weight: 800;
-      letter-spacing: 0.02em;
-      font-size: clamp(72px, 14vw, 180px);
-      line-height: 1.0;
-      text-shadow: 0 6px 30px rgba(0,0,0,0.25);
+      font-weight: 900;
+      letter-spacing: 0.03em;
+      font-size: clamp(80px, 15vw, 200px);
+      line-height: 1;
     }
 
     .label {
-      font-size: clamp(28px, 5vw, 72px);
+      font-size: clamp(32px, 6vw, 80px);
       font-weight: 700;
-      line-height: 1.1;
       min-height: 1.2em;
-      opacity: 0.98;
-      text-shadow: 0 6px 30px rgba(0,0,0,0.25);
     }
 
     .blink {
       animation: blink 0.55s step-end infinite;
     }
+
     @keyframes blink {
       50% { opacity: 0; }
     }
 
     .sub {
       font-size: 14px;
-      opacity: 0.9;
+      opacity: 0.85;
     }
 
-    details {
-      width: 100%;
-      max-width: 980px;
-      margin: 0 auto;
-      text-align: left;
-      background: rgba(0,0,0,0.18);
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 14px;
-      padding: 10px 12px;
-      backdrop-filter: blur(6px);
-    }
-    summary { cursor: pointer; font-weight: 600; }
-    textarea {
-      width: 100%;
-      min-height: 130px;
-      resize: vertical;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.22);
-      padding: 10px;
-      background: rgba(0,0,0,0.2);
-      color: #fff;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 13px;
-      outline: none;
-    }
     .row {
-      display: flex; gap: 10px; flex-wrap: wrap;
-      align-items: center;
-      margin-top: 8px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
     }
+
     button {
       border: 0;
       border-radius: 12px;
       padding: 10px 14px;
-      font-weight: 650;
+      font-weight: 600;
       cursor: pointer;
-      background: rgba(255,255,255,0.92);
+      background: rgba(255,255,255,0.9);
       color: #111;
     }
+
     button.secondary {
       background: rgba(255,255,255,0.14);
       color: #fff;
-      border: 1px solid rgba(255,255,255,0.22);
+      border: 1px solid rgba(255,255,255,0.25);
     }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      background: rgba(0,0,0,0.2);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    details {
+      background: rgba(0,0,0,0.18);
+      border-radius: 14px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
     .pill {
-      display: inline-block;
       padding: 6px 10px;
       border-radius: 999px;
-      background: rgba(0,0,0,0.22);
-      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.2);
       font-size: 13px;
-      opacity: 0.95;
     }
   </style>
 </head>
+
 <body>
-  <div class="wrap">
-    <div class="clock" id="clock">--:--:--</div>
-    <div class="label" id="label"></div>
+<div class="wrap">
 
-    <div class="row" style="justify-content:center;">
-      <button id="enableSoundBtn">Enable sound</button>
-      <button class="secondary" id="reloadBtn">Reload schedule</button>
-      <span class="pill" id="statusPill">Sound: off · Schedule: embedded</span>
-    </div>
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="label" id="label"></div>
 
-    <div class="sub" id="nextInfo"></div>
-
-    <details>
-      <summary>Schedule CSV (time, "label", color) — edit & Reload</summary>
-      <textarea id="csvInput">10:00, "Start", red
-10:05, "Rollen", blue
-10:10, "Stationen", yellow</textarea>
-      <div class="row">
-        <button class="secondary" id="loadFromFileBtn">Try load from schedule.csv</button>
-        <span class="sub">Tip: Put a <code>schedule.csv</code> next to <code>index.html</code> to fetch it.</span>
-      </div>
-    </details>
+  <div class="row">
+    <button id="enableSound">Enable sound</button>
+    <button id="reload" class="secondary">Reload schedule</button>
+    <span class="pill" id="status">Sound: off · Embedded CSV</span>
   </div>
 
+  <div class="sub" id="next"></div>
+
+  <details>
+    <summary>Schedule CSV (fallback / local)</summary>
+    <textarea id="csvInput">
+10:00, "Start", red
+10:05, "Rollen", blue
+10:10, "Stationen", yellow
+    </textarea>
+  </details>
+
+</div>
+
 <script>
-(() => {
-  // ---------- helpers ----------
-  const pad2 = (n) => String(n).padStart(2, "0");
-  const toSecondsSinceMidnight = (d) => d.getHours()*3600 + d.getMinutes()*60 + d.getSeconds();
-  const parseTimeToSeconds = (hhmm) => {
-    // expects HH:MM (24h)
-    const m = hhmm.trim().match(/^(\d{1,2})\s*:\s*(\d{2})$/);
-    if (!m) return null;
-    const hh = Number(m[1]), mm = Number(m[2]);
-    if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return null;
-    return hh*3600 + mm*60;
+/* -------------------------------------------------------
+   Utilities
+------------------------------------------------------- */
+const pad = n => String(n).padStart(2,"0");
+
+function getQueryParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function parseTimeToSeconds(t) {
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60;
+}
+
+function splitCSVLine(line) {
+  let out = [], cur = "", inQ = false;
+  for (let c of line) {
+    if (c === '"') inQ = !inQ;
+    else if (c === "," && !inQ) { out.push(cur.trim()); cur=""; }
+    else cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseSchedule(csv) {
+  return csv.split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("#"))
+    .map(l => {
+      const [t,lbl,col] = splitCSVLine(l);
+      return {
+        timeSec: parseTimeToSeconds(t),
+        timeStr: t,
+        label: lbl?.replace(/^"|"$|^'|'$/g,""),
+        color: col?.replace(/^"|"$|^'|'$/g,"")
+      };
+    })
+    .filter(e => e.timeSec !== null)
+    .sort((a,b) => a.timeSec - b.timeSec);
+}
+
+/* -------------------------------------------------------
+   Audio (chime)
+------------------------------------------------------- */
+let audioCtx = null;
+let soundEnabled = false;
+
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  soundEnabled = true;
+  updateStatus();
+}
+
+function chime() {
+  if (!soundEnabled) return;
+  const now = audioCtx.currentTime;
+
+  const tone = (f, d) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.3, now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, now+d);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(now);
+    o.stop(now+d);
   };
 
-  // Split a CSV line into 3 columns: time, label, color.
-  // Supports labels in quotes containing commas.
-  function split3(line) {
-    const out = [];
-    let cur = "";
-    let inQuotes = false;
-    for (let i=0; i<line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') { inQuotes = !inQuotes; cur += ch; continue; }
-      if (ch === "," && !inQuotes) { out.push(cur.trim()); cur = ""; continue; }
-      cur += ch;
-    }
-    out.push(cur.trim());
-    return out;
-  }
+  tone(880,0.5);
+  setTimeout(()=>tone(660,0.7),150);
+}
 
-  function stripOuterQuotes(s) {
-    const t = s.trim();
-    if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
-      return t.slice(1, -1);
-    }
-    return t;
-  }
+/* -------------------------------------------------------
+   State
+------------------------------------------------------- */
+const clockEl = document.getElementById("clock");
+const labelEl = document.getElementById("label");
+const nextEl  = document.getElementById("next");
+const statusEl= document.getElementById("status");
+const csvInput= document.getElementById("csvInput");
 
-  function parseSchedule(csvText) {
-    const lines = csvText
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(l => l && !l.startsWith("#"));
+let schedule = [];
+let fired = new Set();
+let source = "embedded";
 
-    const items = [];
-    for (const line of lines) {
-      const cols = split3(line);
-      if (cols.length < 3) continue;
+/* -------------------------------------------------------
+   Load CSV (URL param OR fallback)
+------------------------------------------------------- */
+async function loadSchedule() {
+  const csvUrl = getQueryParam("csv");
 
-      const tSec = parseTimeToSeconds(cols[0]);
-      if (tSec == null) continue;
-
-      const label = stripOuterQuotes(cols[1]);
-      const color = stripOuterQuotes(cols[2]);
-
-      items.push({
-        timeStr: cols[0].trim(),
-        timeSec: tSec,
-        label,
-        color
-      });
-    }
-
-    items.sort((a,b) => a.timeSec - b.timeSec);
-    return items;
-  }
-
-  // ---------- audio (chime without external files) ----------
-  let audioCtx = null;
-  let soundEnabled = false;
-
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") return audioCtx.resume();
-    return Promise.resolve();
-  }
-
-  function chime() {
-    if (!soundEnabled || !audioCtx) return;
-
-    const now = audioCtx.currentTime;
-
-    // Simple “ding-dong”: two tones with quick decay.
-    const makeTone = (freq, start, dur) => {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.type = "sine";
-      o.frequency.setValueAtTime(freq, start);
-      g.gain.setValueAtTime(0.0001, start);
-      g.gain.exponentialRampToValueAtTime(0.25, start + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-      o.connect(g).connect(audioCtx.destination);
-      o.start(start);
-      o.stop(start + dur + 0.02);
-    };
-
-    makeTone(880, now, 0.55);
-    makeTone(660, now + 0.18, 0.75);
-  }
-
-  // ---------- UI/state ----------
-  const clockEl = document.getElementById("clock");
-  const labelEl = document.getElementById("label");
-  const nextInfoEl = document.getElementById("nextInfo");
-  const statusPill = document.getElementById("statusPill");
-
-  const csvInput = document.getElementById("csvInput");
-  const reloadBtn = document.getElementById("reloadBtn");
-  const enableSoundBtn = document.getElementById("enableSoundBtn");
-  const loadFromFileBtn = document.getElementById("loadFromFileBtn");
-
-  let schedule = parseSchedule(csvInput.value);
-  let scheduleSource = "embedded";
-
-  // Reset daily triggers using a date key:
-  let dayKey = "";
-  const firedToday = new Set(); // holds timeSec that already fired
-
-  // Blink control
-  const BLINK_MS = 7000; // how long it blinks when triggered
-  let blinkTimeout = null;
-
-  function setBlink(on) {
-    labelEl.classList.toggle("blink", !!on);
-  }
-
-  function triggerCue(item) {
-    labelEl.textContent = item.label;
-    setBlink(true);
-
-    if (blinkTimeout) clearTimeout(blinkTimeout);
-    blinkTimeout = setTimeout(() => setBlink(false), BLINK_MS);
-
-    chime();
-  }
-
-  function updateStatusPill() {
-    statusPill.textContent = `Sound: ${soundEnabled ? "on" : "off"} · Schedule: ${scheduleSource}`;
-  }
-
-  function setBackground(color) {
-    document.documentElement.style.setProperty("--bg", color || "#111");
-  }
-
-  function getCurrentSegment(nowSec) {
-    // Find latest item whose time <= nowSec
-    let current = null;
-    for (let i=0; i<schedule.length; i++) {
-      if (schedule[i].timeSec <= nowSec) current = schedule[i];
-      else break;
-    }
-    return current;
-  }
-
-  function getNextItem(nowSec) {
-    for (const it of schedule) {
-      if (it.timeSec > nowSec) return it;
-    }
-    return null;
-  }
-
-  function fmtCountdown(deltaSec) {
-    const s = Math.max(0, Math.floor(deltaSec));
-    const mm = Math.floor(s/60);
-    const ss = s % 60;
-    if (mm >= 60) {
-      const hh = Math.floor(mm/60);
-      const m2 = mm % 60;
-      return `${hh}:${pad2(m2)}:${pad2(ss)}`;
-    }
-    return `${mm}:${pad2(ss)}`;
-  }
-
-  function tick() {
-    const now = new Date();
-
-    // reset daily trigger set if date changed
-    const dk = `${now.getFullYear()}-${pad2(now.getMonth()+1)}-${pad2(now.getDate())}`;
-    if (dk !== dayKey) {
-      dayKey = dk;
-      firedToday.clear();
-      setBlink(false);
-      // Optionally clear label at midnight:
-      // labelEl.textContent = "";
-    }
-
-    // clock
-    const hh = pad2(now.getHours());
-    const mm = pad2(now.getMinutes());
-    const ss = pad2(now.getSeconds());
-    clockEl.textContent = `${hh}:${mm}:${ss}`;
-
-    if (!schedule.length) {
-      labelEl.textContent = "No schedule loaded";
-      setBackground("#111");
-      nextInfoEl.textContent = "";
-      return;
-    }
-
-    const nowSec = toSecondsSinceMidnight(now);
-
-    // background segment color
-    const seg = getCurrentSegment(nowSec);
-    setBackground(seg ? seg.color : "#111");
-
-    // show current segment label (non-blinking normally)
-    if (!labelEl.classList.contains("blink")) {
-      labelEl.textContent = seg ? seg.label : "";
-    }
-
-    // trigger exactly at HH:MM (any second within that minute, but only once)
-    // We treat an event as "due" when current time is between [timeSec, timeSec+59]
-    for (const item of schedule) {
-      const inMinute = nowSec >= item.timeSec && nowSec < item.timeSec + 60;
-      if (inMinute && !firedToday.has(item.timeSec)) {
-        firedToday.add(item.timeSec);
-        triggerCue(item);
-        break;
-      }
-    }
-
-    // next cue info
-    const next = getNextItem(nowSec);
-    if (next) {
-      const delta = next.timeSec - nowSec;
-      nextInfoEl.textContent = `Next: ${next.timeStr} — ${next.label} (in ${fmtCountdown(delta)})`;
-    } else {
-      nextInfoEl.textContent = `No more cues today.`;
-    }
-  }
-
-  // ---------- wiring ----------
-  reloadBtn.addEventListener("click", () => {
-    schedule = parseSchedule(csvInput.value);
-    scheduleSource = "embedded";
-    firedToday.clear();
-    setBlink(false);
-    updateStatusPill();
-  });
-
-  enableSoundBtn.addEventListener("click", async () => {
-    await ensureAudio();
-    soundEnabled = true;
-    updateStatusPill();
-    // tiny confirmation blip
-    chime();
-  });
-
-  loadFromFileBtn.addEventListener("click", async () => {
+  if (csvUrl) {
     try {
-      const res = await fetch("schedule.csv", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch(csvUrl, { cache: "no-store" });
       const text = await res.text();
-      csvInput.value = text.trim();
       schedule = parseSchedule(text);
-      scheduleSource = "schedule.csv";
-      firedToday.clear();
-      setBlink(false);
-      updateStatusPill();
-    } catch (e) {
-      scheduleSource = "embedded (schedule.csv not found)";
-      updateStatusPill();
-      alert("Could not load schedule.csv. Make sure it's next to index.html and published on GitHub Pages.");
+      source = "remote CSV";
+      csvInput.value = "(loaded from URL)";
+    } catch {
+      schedule = parseSchedule(csvInput.value);
+      source = "embedded (fallback)";
+    }
+  } else {
+    schedule = parseSchedule(csvInput.value);
+    source = "embedded";
+  }
+  fired.clear();
+  updateStatus();
+}
+
+/* -------------------------------------------------------
+   UI
+------------------------------------------------------- */
+function updateStatus() {
+  statusEl.textContent =
+    `Sound: ${soundEnabled ? "on" : "off"} · ${source}`;
+}
+
+function trigger(entry) {
+  labelEl.textContent = entry.label;
+  labelEl.classList.add("blink");
+  chime();
+  setTimeout(()=>labelEl.classList.remove("blink"), 7000);
+}
+
+function tick() {
+  const now = new Date();
+  const sec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+
+  clockEl.textContent =
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  const current = [...schedule].reverse().find(e => e.timeSec <= sec);
+  document.documentElement.style.setProperty("--bg", current?.color || "#111");
+
+  if (!labelEl.classList.contains("blink") && current)
+    labelEl.textContent = current.label;
+
+  schedule.forEach(e => {
+    if (sec >= e.timeSec && sec < e.timeSec+60 && !fired.has(e.timeSec)) {
+      fired.add(e.timeSec);
+      trigger(e);
     }
   });
 
-  updateStatusPill();
-  tick();
-  setInterval(tick, 250); // smoother minute-boundary detection
-})();
+  const next = schedule.find(e => e.timeSec > sec);
+  if (next) {
+    const d = next.timeSec - sec;
+    nextEl.textContent =
+      `Next: ${next.timeStr} – ${next.label} (in ${Math.floor(d/60)}:${pad(d%60)})`;
+  } else {
+    nextEl.textContent = "No more cues today.";
+  }
+}
+
+/* -------------------------------------------------------
+   Events
+------------------------------------------------------- */
+document.getElementById("enableSound").onclick = () => {
+  if (!audioCtx) initAudio();
+};
+
+document.getElementById("reload").onclick = loadSchedule;
+
+/* -------------------------------------------------------
+   Start
+------------------------------------------------------- */
+loadSchedule();
+tick();
+setInterval(tick, 250);
 </script>
 </body>
 </html>
