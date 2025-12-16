@@ -7,11 +7,7 @@
 
   <style>
     :root { --bg: #111; --fg: #fff; }
-
-    html, body {
-      height: 100%;
-      margin: 0;
-    }
+    html, body { height: 100%; margin: 0; }
 
     body {
       background: var(--bg);
@@ -51,16 +47,16 @@
       50% { opacity: 0; }
     }
 
-    .sub {
-      font-size: 14px;
-      opacity: 0.85;
-    }
-
     .row {
       display: flex;
       gap: 10px;
       justify-content: center;
       flex-wrap: wrap;
+    }
+
+    .sub {
+      font-size: 14px;
+      opacity: 0.85;
     }
 
     button {
@@ -122,13 +118,13 @@
   <div class="row">
     <button id="enableSound">Enable sound</button>
     <button id="reload" class="secondary">Reload schedule</button>
-    <span class="pill" id="status">Sound: off · Embedded CSV</span>
+    <span class="pill" id="status">Sound: off · loading…</span>
   </div>
 
   <div class="sub" id="next"></div>
 
   <details>
-    <summary>Schedule CSV (fallback / local)</summary>
+    <summary>Schedule CSV (fallback)</summary>
     <textarea id="csvInput">
 10:00, "Start", red
 10:05, "Rollen", blue
@@ -139,27 +135,23 @@
 </div>
 
 <script>
-/* -------------------------------------------------------
-   Utilities
-------------------------------------------------------- */
+/* =====================================================
+   Helpers
+===================================================== */
 const pad = n => String(n).padStart(2,"0");
-
-function getQueryParam(name) {
-  return new URLSearchParams(window.location.search).get(name);
-}
 
 function parseTimeToSeconds(t) {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return null;
-  return Number(m[1]) * 3600 + Number(m[2]) * 60;
+  return Number(m[1])*3600 + Number(m[2])*60;
 }
 
-function splitCSVLine(line) {
-  let out = [], cur = "", inQ = false;
+function splitCSV(line) {
+  let out=[], cur="", q=false;
   for (let c of line) {
-    if (c === '"') inQ = !inQ;
-    else if (c === "," && !inQ) { out.push(cur.trim()); cur=""; }
-    else cur += c;
+    if (c === '"') q=!q;
+    else if (c === "," && !q) { out.push(cur.trim()); cur=""; }
+    else cur+=c;
   }
   out.push(cur.trim());
   return out;
@@ -167,10 +159,10 @@ function splitCSVLine(line) {
 
 function parseSchedule(csv) {
   return csv.split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(l => l && !l.startsWith("#"))
-    .map(l => {
-      const [t,lbl,col] = splitCSVLine(l);
+    .map(l=>l.trim())
+    .filter(l=>l && !l.startsWith("#"))
+    .map(l=>{
+      const [t,lbl,col]=splitCSV(l);
       return {
         timeSec: parseTimeToSeconds(t),
         timeStr: t,
@@ -178,140 +170,150 @@ function parseSchedule(csv) {
         color: col?.replace(/^"|"$|^'|'$/g,"")
       };
     })
-    .filter(e => e.timeSec !== null)
-    .sort((a,b) => a.timeSec - b.timeSec);
+    .filter(e=>e.timeSec!==null)
+    .sort((a,b)=>a.timeSec-b.timeSec);
 }
 
-/* -------------------------------------------------------
+/* =====================================================
+   FIX B: robust CSV URL extraction
+===================================================== */
+function getCsvUrlFromQuery() {
+  const params = new URLSearchParams(window.location.search);
+  let csvUrl = params.get("csv");
+  if (!csvUrl) return null;
+
+  if (csvUrl.includes("docs.google.com")) {
+    const extras = [];
+    ["gid","single","output"].forEach(k=>{
+      if (params.has(k) && !csvUrl.includes(k+"=")) {
+        extras.push(`${k}=${encodeURIComponent(params.get(k))}`);
+      }
+    });
+    if (extras.length) {
+      csvUrl += (csvUrl.includes("?") ? "&" : "?") + extras.join("&");
+    }
+  }
+  return csvUrl;
+}
+
+/* =====================================================
    Audio (chime)
-------------------------------------------------------- */
-let audioCtx = null;
-let soundEnabled = false;
+===================================================== */
+let audioCtx=null, soundEnabled=false;
 
 function initAudio() {
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  soundEnabled = true;
+  audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  soundEnabled=true;
   updateStatus();
 }
 
 function chime() {
   if (!soundEnabled) return;
-  const now = audioCtx.currentTime;
+  const now=audioCtx.currentTime;
 
-  const tone = (f, d) => {
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.frequency.value = f;
-    g.gain.setValueAtTime(0.001, now);
-    g.gain.exponentialRampToValueAtTime(0.3, now+0.01);
-    g.gain.exponentialRampToValueAtTime(0.001, now+d);
+  const tone=(f,d)=>{
+    const o=audioCtx.createOscillator();
+    const g=audioCtx.createGain();
+    o.frequency.value=f;
+    g.gain.setValueAtTime(0.001,now);
+    g.gain.exponentialRampToValueAtTime(0.3,now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001,now+d);
     o.connect(g).connect(audioCtx.destination);
     o.start(now);
     o.stop(now+d);
   };
-
   tone(880,0.5);
   setTimeout(()=>tone(660,0.7),150);
 }
 
-/* -------------------------------------------------------
+/* =====================================================
    State
-------------------------------------------------------- */
-const clockEl = document.getElementById("clock");
-const labelEl = document.getElementById("label");
-const nextEl  = document.getElementById("next");
-const statusEl= document.getElementById("status");
-const csvInput= document.getElementById("csvInput");
+===================================================== */
+const clockEl=document.getElementById("clock");
+const labelEl=document.getElementById("label");
+const nextEl=document.getElementById("next");
+const statusEl=document.getElementById("status");
+const csvInput=document.getElementById("csvInput");
 
-let schedule = [];
-let fired = new Set();
-let source = "embedded";
+let schedule=[];
+let fired=new Set();
+let source="";
 
-/* -------------------------------------------------------
-   Load CSV (URL param OR fallback)
-------------------------------------------------------- */
+/* =====================================================
+   Load schedule
+===================================================== */
 async function loadSchedule() {
-  const csvUrl = getQueryParam("csv");
-
-  if (csvUrl) {
-    try {
-      const res = await fetch(csvUrl, { cache: "no-store" });
-      const text = await res.text();
-      schedule = parseSchedule(text);
-      source = "remote CSV";
-      csvInput.value = "(loaded from URL)";
-    } catch {
-      schedule = parseSchedule(csvInput.value);
-      source = "embedded (fallback)";
+  const csvUrl=getCsvUrlFromQuery();
+  try {
+    if (csvUrl) {
+      const res=await fetch(csvUrl,{cache:"no-store"});
+      const text=await res.text();
+      schedule=parseSchedule(text);
+      source="remote CSV";
+      csvInput.value="(loaded from URL)";
+    } else {
+      schedule=parseSchedule(csvInput.value);
+      source="embedded";
     }
-  } else {
-    schedule = parseSchedule(csvInput.value);
-    source = "embedded";
+  } catch {
+    schedule=parseSchedule(csvInput.value);
+    source="embedded (fallback)";
   }
   fired.clear();
   updateStatus();
 }
 
-/* -------------------------------------------------------
-   UI
-------------------------------------------------------- */
+/* =====================================================
+   UI + clock
+===================================================== */
 function updateStatus() {
-  statusEl.textContent =
-    `Sound: ${soundEnabled ? "on" : "off"} · ${source}`;
+  statusEl.textContent=`Sound: ${soundEnabled?"on":"off"} · ${source}`;
 }
 
-function trigger(entry) {
-  labelEl.textContent = entry.label;
+function trigger(e) {
+  labelEl.textContent=e.label;
   labelEl.classList.add("blink");
   chime();
-  setTimeout(()=>labelEl.classList.remove("blink"), 7000);
+  setTimeout(()=>labelEl.classList.remove("blink"),7000);
 }
 
 function tick() {
-  const now = new Date();
-  const sec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+  const now=new Date();
+  const sec=now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
 
-  clockEl.textContent =
-    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  clockEl.textContent=`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 
-  const current = [...schedule].reverse().find(e => e.timeSec <= sec);
-  document.documentElement.style.setProperty("--bg", current?.color || "#111");
+  const current=[...schedule].reverse().find(e=>e.timeSec<=sec);
+  document.documentElement.style.setProperty("--bg",current?.color||"#111");
 
   if (!labelEl.classList.contains("blink") && current)
-    labelEl.textContent = current.label;
+    labelEl.textContent=current.label;
 
-  schedule.forEach(e => {
-    if (sec >= e.timeSec && sec < e.timeSec+60 && !fired.has(e.timeSec)) {
+  schedule.forEach(e=>{
+    if (sec>=e.timeSec && sec<e.timeSec+60 && !fired.has(e.timeSec)) {
       fired.add(e.timeSec);
       trigger(e);
     }
   });
 
-  const next = schedule.find(e => e.timeSec > sec);
-  if (next) {
-    const d = next.timeSec - sec;
-    nextEl.textContent =
-      `Next: ${next.timeStr} – ${next.label} (in ${Math.floor(d/60)}:${pad(d%60)})`;
-  } else {
-    nextEl.textContent = "No more cues today.";
-  }
+  const next=schedule.find(e=>e.timeSec>sec);
+  nextEl.textContent=next
+    ? `Next: ${next.timeStr} – ${next.label}`
+    : "No more cues today.";
 }
 
-/* -------------------------------------------------------
+/* =====================================================
    Events
-------------------------------------------------------- */
-document.getElementById("enableSound").onclick = () => {
-  if (!audioCtx) initAudio();
-};
+===================================================== */
+document.getElementById("enableSound").onclick=()=>{ if(!audioCtx) initAudio(); };
+document.getElementById("reload").onclick=loadSchedule;
 
-document.getElementById("reload").onclick = loadSchedule;
-
-/* -------------------------------------------------------
+/* =====================================================
    Start
-------------------------------------------------------- */
+===================================================== */
 loadSchedule();
 tick();
-setInterval(tick, 250);
+setInterval(tick,250);
 </script>
 </body>
 </html>

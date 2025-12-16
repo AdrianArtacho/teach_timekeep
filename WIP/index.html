@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Schedule Clock</title>
+
+  <style>
+    :root { --bg: #111; --fg: #fff; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display: grid;
+      place-items: center;
+      transition: background 300ms linear;
+    }
+
+    .wrap {
+      width: min(1200px, 94vw);
+      display: grid;
+      gap: 18px;
+      text-align: center;
+    }
+
+    .clock {
+      font-variant-numeric: tabular-nums;
+      font-weight: 900;
+      letter-spacing: 0.03em;
+      font-size: clamp(80px, 15vw, 200px);
+      line-height: 1;
+    }
+
+    .label {
+      font-size: clamp(32px, 6vw, 80px);
+      font-weight: 700;
+      min-height: 1.2em;
+    }
+
+    .blink {
+      animation: blink 0.55s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    .sub {
+      font-size: 14px;
+      opacity: 0.85;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      background: rgba(255,255,255,0.9);
+      color: #111;
+    }
+
+    button.secondary {
+      background: rgba(255,255,255,0.14);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      border-radius: 10px;
+      padding: 10px;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+      background: rgba(0,0,0,0.2);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    details {
+      background: rgba(0,0,0,0.18);
+      border-radius: 14px;
+      padding: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="label" id="label"></div>
+
+  <div class="row">
+    <button id="enableSound">Enable sound</button>
+    <button id="reload" class="secondary">Reload schedule</button>
+    <span class="pill" id="status">Sound: off · Embedded CSV</span>
+  </div>
+
+  <div class="sub" id="next"></div>
+
+  <details>
+    <summary>Schedule CSV (fallback / local)</summary>
+    <textarea id="csvInput">
+10:00, "Start", red
+10:05, "Rollen", blue
+10:10, "Stationen", yellow
+    </textarea>
+  </details>
+
+</div>
+
+<script>
+/* -------------------------------------------------------
+   Utilities
+------------------------------------------------------- */
+const pad = n => String(n).padStart(2,"0");
+
+function getQueryParam(name) {
+  return new URLSearchParams(window.location.search).get(name);
+}
+
+function parseTimeToSeconds(t) {
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60;
+}
+
+function splitCSVLine(line) {
+  let out = [], cur = "", inQ = false;
+  for (let c of line) {
+    if (c === '"') inQ = !inQ;
+    else if (c === "," && !inQ) { out.push(cur.trim()); cur=""; }
+    else cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseSchedule(csv) {
+  return csv.split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith("#"))
+    .map(l => {
+      const [t,lbl,col] = splitCSVLine(l);
+      return {
+        timeSec: parseTimeToSeconds(t),
+        timeStr: t,
+        label: lbl?.replace(/^"|"$|^'|'$/g,""),
+        color: col?.replace(/^"|"$|^'|'$/g,"")
+      };
+    })
+    .filter(e => e.timeSec !== null)
+    .sort((a,b) => a.timeSec - b.timeSec);
+}
+
+/* -------------------------------------------------------
+   Audio (chime)
+------------------------------------------------------- */
+let audioCtx = null;
+let soundEnabled = false;
+
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  soundEnabled = true;
+  updateStatus();
+}
+
+function chime() {
+  if (!soundEnabled) return;
+  const now = audioCtx.currentTime;
+
+  const tone = (f, d) => {
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.exponentialRampToValueAtTime(0.3, now+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, now+d);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(now);
+    o.stop(now+d);
+  };
+
+  tone(880,0.5);
+  setTimeout(()=>tone(660,0.7),150);
+}
+
+/* -------------------------------------------------------
+   State
+------------------------------------------------------- */
+const clockEl = document.getElementById("clock");
+const labelEl = document.getElementById("label");
+const nextEl  = document.getElementById("next");
+const statusEl= document.getElementById("status");
+const csvInput= document.getElementById("csvInput");
+
+let schedule = [];
+let fired = new Set();
+let source = "embedded";
+
+/* -------------------------------------------------------
+   Load CSV (URL param OR fallback)
+------------------------------------------------------- */
+async function loadSchedule() {
+  const csvUrl = getQueryParam("csv");
+
+  if (csvUrl) {
+    try {
+      const res = await fetch(csvUrl, { cache: "no-store" });
+      const text = await res.text();
+      schedule = parseSchedule(text);
+      source = "remote CSV";
+      csvInput.value = "(loaded from URL)";
+    } catch {
+      schedule = parseSchedule(csvInput.value);
+      source = "embedded (fallback)";
+    }
+  } else {
+    schedule = parseSchedule(csvInput.value);
+    source = "embedded";
+  }
+  fired.clear();
+  updateStatus();
+}
+
+/* -------------------------------------------------------
+   UI
+------------------------------------------------------- */
+function updateStatus() {
+  statusEl.textContent =
+    `Sound: ${soundEnabled ? "on" : "off"} · ${source}`;
+}
+
+function trigger(entry) {
+  labelEl.textContent = entry.label;
+  labelEl.classList.add("blink");
+  chime();
+  setTimeout(()=>labelEl.classList.remove("blink"), 7000);
+}
+
+function tick() {
+  const now = new Date();
+  const sec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+
+  clockEl.textContent =
+    `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  const current = [...schedule].reverse().find(e => e.timeSec <= sec);
+  document.documentElement.style.setProperty("--bg", current?.color || "#111");
+
+  if (!labelEl.classList.contains("blink") && current)
+    labelEl.textContent = current.label;
+
+  schedule.forEach(e => {
+    if (sec >= e.timeSec && sec < e.timeSec+60 && !fired.has(e.timeSec)) {
+      fired.add(e.timeSec);
+      trigger(e);
+    }
+  });
+
+  const next = schedule.find(e => e.timeSec > sec);
+  if (next) {
+    const d = next.timeSec - sec;
+    nextEl.textContent =
+      `Next: ${next.timeStr} – ${next.label} (in ${Math.floor(d/60)}:${pad(d%60)})`;
+  } else {
+    nextEl.textContent = "No more cues today.";
+  }
+}
+
+/* -------------------------------------------------------
+   Events
+------------------------------------------------------- */
+document.getElementById("enableSound").onclick = () => {
+  if (!audioCtx) initAudio();
+};
+
+document.getElementById("reload").onclick = loadSchedule;
+
+/* -------------------------------------------------------
+   Start
+------------------------------------------------------- */
+loadSchedule();
+tick();
+setInterval(tick, 250);
+</script>
+</body>
+</html>
