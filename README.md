@@ -18,6 +18,8 @@ It is designed to be:
 * editable live via **Google Sheets**
 * deployable with **zero backend**
 
+![img/gui.png](img/gui.png)
+
 ---
 
 ## ✨ Features
